@@ -1,28 +1,89 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
+using System.Data;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Xml;
 
 namespace CopyWallGroup.VK
 {
     class VKApi
     {
-        string vkuri = "https://oauth.vk.com/authorize?client_id="+Properties.Resources.idVK+"&redirect_uri=http://vk.com&scope=friends,groups,stats&response_type=token&revoke=1";
+        string vkuri = "https://oauth.vk.com/authorize?client_id="+Properties.Resources.idVK+"&redirect_uri=https://vk.com&scope=friends,groups,stats&response_type=token&revoke=1";
 
         private System.Windows.Forms.WebBrowser getWebBroserControl()
         {
             WebBrowser web = new WebBrowser();
             web.Url = new Uri(vkuri);
+            
             web.Dock = System.Windows.Forms.DockStyle.Fill;
             web.DocumentCompleted += new WebBrowserDocumentCompletedEventHandler(
                 (object sender, WebBrowserDocumentCompletedEventArgs e) =>
             {
                 WebBrowser bro = (WebBrowser)sender;
                 int index = e.Url.ToString().IndexOf("access_token=");
-                if (index < 0) return;
-                index += "access_token=".Length;
+                if (index < 0)
+                {
+                    if (bro.DocumentText.ToString().IndexOf("<input type=\"text\" class=\"form_input\" name=\"email\"") > 0)
+                    {
+                        HtmlDocument doc = bro.Document;
+                        Parallel.Invoke(() =>
+                        {
+                            int n = 0;
+                            foreach (HtmlElement item in doc.GetElementById("box").All)
+                            {
+                                if (n == 0 && item.Name == "email")
+                                {
+                                    n = 1;
+                                    item.InnerText = Properties.Settings.Default.VkLogin;
+                                }
+                                else if (n == 1 && item.Name == "pass")
+                                {
+                                    n = 2;
+                                    item.InnerText = Properties.Settings.Default.VkPass;
+                                    break;
+                                }
+                            }
+                        }, () =>
+                        {
+                            HtmlElement btn = doc.GetElementById("install_allow");
+                            if (btn.InnerText == "Войти" && 1 == 2)
+                                btn.Click += new HtmlElementEventHandler(delegate(object sender_btn, HtmlElementEventArgs args)
+                                {
+                                    HtmlElement button = (HtmlElement)sender_btn;
+                                    HtmlDocument doc_btn = button.Document;
+                                    string login = doc.GetElementById("box").All.GetElementsByName("email")[0].InnerText;
+                                    string password = doc.GetElementById("box").All.GetElementsByName("pass")[0].InnerText;
+                                    if (login != null && password != null && login.Length > 0 && password.Length > 0)
+                                    {
+                                        bool ifi = false;
+                                        if (Properties.Settings.Default.VkLogin != login)
+                                        {
+                                            Properties.Settings.Default.VkLogin = login;
+                                            ifi = true;
+                                        }
+                                        if (Properties.Settings.Default.VkPass != password)
+                                        {
+                                            Properties.Settings.Default.VkPass = password;
+                                            ifi = true;
+                                        }
+                                        if (ifi)
+                                        {
+                                            Properties.Settings.Default.Save();
+                                        }
+                                    }
+                                });
+                        });
+                        return;
+                    }
+                    return;
+                }
+                index += 13;
                 string oldtoken = Properties.Settings.Default.VkTokenValue;
                 DateTime oldTime = Properties.Settings.Default.VkTokenLife;
                 Parallel.Invoke(() =>
@@ -34,24 +95,64 @@ namespace CopyWallGroup.VK
                     if (r == DialogResult.Yes)
                     {
                         Properties.Settings.Default.VkTokenValue = token;
+                        Properties.Settings.Default.Save();
                         showNotifyIconInformation("Получен новый токен: " + token + " .", bro);
                     }
                 }, () =>
                 {
                     string tmp = e.Url.ToString();
                     int time;
-                    tmp = new string(tmp.Substring(tmp.IndexOf("expires_in=")).
+                    tmp = new string(tmp.Substring(tmp.IndexOf("expires_in=") + 11).
                         TakeWhile(x => x != '&' && int.TryParse(x.ToString(), out time) == true).ToArray());
                     if (int.TryParse(tmp, out time) == true)
                     {
                         Properties.Settings.Default.VkTokenLife = DateTime.Now.AddSeconds(time);
+                        Properties.Settings.Default.Save();
                         tmp = "Новый токен будет жить " + (Properties.Settings.Default.VkTokenLife - DateTime.Now) + ".";
                     }
-                    else tmp = "Не удалось распознать токен в этом сообщении - " + tmp + " .";
+                    else tmp = "Не удалось распознать время жизни токена в этом сообщении - " + tmp + " .";
                     showNotifyIconInformation(tmp, bro);
                 });
+                bro.FindForm().Close();
             });
             return web;
+        }
+
+        /// <summary>
+        /// Загружает новости из группы садко
+        /// </summary>
+        /// <returns></returns>
+        internal DataTable downloadWallNews()
+        {
+            DataTable table = getTableWall();
+
+            string r = "https://api.vk.com/" +
+                "method/wall.get.xml?owner_id=" + (-86525154).ToString() +
+                "&count=" + 100 +
+                "&extended=1" +
+                "&access_token="+ Properties.Settings.Default.VkTokenValue;
+            WebRequest request = WebRequest.Create(r);
+            WebResponse resp = request.GetResponse();
+            Stream stream = resp.GetResponseStream();
+            StreamReader sr = new StreamReader(stream);
+            string Out = sr.ReadToEnd();
+            sr.Close();
+            JToken token = JToken.Parse(Out);
+            XmlDocument doc = new XmlDocument();
+            return table;
+        }
+
+        /// <summary>
+        /// Таблица для записей со стены ВК;
+        /// </summary>
+        /// <returns></returns>
+        private DataTable getTableWall()
+        {
+            DataTable table = new DataTable();
+            table.Columns.Add("ID post", typeof(int));
+            table.Columns.Add("DateTime", typeof(DateTime));
+            table.Columns.Add("Text", typeof(string));
+            return table;
         }
 
         /// <summary>
@@ -62,8 +163,11 @@ namespace CopyWallGroup.VK
         {
             try
             {
+                if (text.Length > 63)
+                    text = text.Substring(0, 60) + "...";
                 NotifyIcon icon = new NotifyIcon();
                 icon.Icon = System.Drawing.SystemIcons.Information;
+                icon.BalloonTipText = text;
                 icon.Text = text;
                 icon.ShowBalloonTip(3000);
             }

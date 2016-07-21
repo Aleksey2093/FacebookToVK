@@ -8,5 +8,11 @@
     <Setting Name="VkTokenLife" Type="System.DateTime" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
+    <Setting Name="VkLogin" Type="System.String" Scope="User">
+      <Value Profile="(Default)">aleksey2093@yandex.ru</Value>
+    </Setting>
+    <Setting Name="VkPass" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
   </Settings>
 </SettingsFile>

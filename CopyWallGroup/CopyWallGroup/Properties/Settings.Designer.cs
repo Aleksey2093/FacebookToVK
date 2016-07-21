@@ -45,5 +45,29 @@ namespace CopyWallGroup.Properties {
                 this["VkTokenLife"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("aleksey2093@yandex.ru")]
+        public string VkLogin {
+            get {
+                return ((string)(this["VkLogin"]));
+            }
+            set {
+                this["VkLogin"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string VkPass {
+            get {
+                return ((string)(this["VkPass"]));
+            }
+            set {
+                this["VkPass"] = value;
+            }
+        }
     }
 }

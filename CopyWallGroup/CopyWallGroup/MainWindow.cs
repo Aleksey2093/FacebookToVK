@@ -19,8 +19,22 @@ namespace CopyWallGroup
 
         private void MainWindow_Load(object sender, EventArgs e)
         {
+            System.Threading.Thread thread = new System.Threading.Thread(() =>
+            {
+                vkstart();
+            });
+            thread.Name = "Авторизация и загрузка новостей VK";
+            thread.Start();
+        }
+
+        private void vkstart()
+        {
             VK.VKApi vk = new VK.VKApi();
-            vk.oauth();
+            Invoke(new MethodInvoker(()=> { vk.oauth(); }));
+            if (Properties.Settings.Default.VkTokenLife > DateTime.Now)
+            {
+                DataTable table = vk.downloadWallNews();
+            }
         }
     }
 }
